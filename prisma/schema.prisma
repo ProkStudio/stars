@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// SQLite по умолчанию для локальной разработки. Для production замените на PostgreSQL (см. README).
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SkuType {
+  STARS
+  PREMIUM
+  BUNDLE
+}
+
+enum OrderStatus {
+  awaiting_payment
+  paid
+  processing
+  fulfilled
+  failed
+  cancelled
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  orders       Order[]
+}
+
+model Category {
+  id     String @id @default(cuid())
+  name   String
+  slug   String @unique
+  sort   Int    @default(0)
+  skus   Sku[]
+}
+
+model Sku {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  description   String   @default("")
+  type          SkuType
+  priceKopecks  Int
+  active        Boolean  @default(true)
+  sort          Int      @default(0)
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  starsAmount   Int?
+  premiumMonths Int?
+  bundleItems   BundleItem[] @relation("BundleSku")
+  componentsIn  BundleItem[] @relation("ComponentSku")
+  orderLines    OrderLine[]
+
+  @@index([categoryId])
+  @@index([type])
+  @@index([active])
+}
+
+model BundleItem {
+  id               String @id @default(cuid())
+  bundleSkuId      String
+  bundleSku        Sku    @relation("BundleSku", fields: [bundleSkuId], references: [id], onDelete: Cascade)
+  componentSkuId   String
+  componentSku     Sku    @relation("ComponentSku", fields: [componentSkuId], references: [id], onDelete: Restrict)
+  quantity         Int    @default(1)
+
+  @@unique([bundleSkuId, componentSkuId])
+  @@index([bundleSkuId])
+}
+
+model OrderCounter {
+  id              String @id @default("singleton")
+  nextOrderNumber Int    @default(10000)
+}
+
+model Order {
+  id                     String      @id @default(cuid())
+  orderNumber            Int         @unique
+  publicToken            String      @unique
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  telegramUsername       String
+  guestEmail             String?
+  userId                 String?
+  user                   User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  status                 OrderStatus @default(awaiting_payment)
+  totalKopecks           Int
+
+  paymentProvider        String?
+  paymentExternalId      String?
+  paidAt                 DateTime?
+
+  fragmentExternalOrderId String?
+  fragmentMeta           Json?
+
+  fulfillmentError       String?
+  fulfillmentAttempts    Int        @default(0)
+  operatorNote           String      @default("")
+
+  lines                  OrderLine[]
+
+  @@index([telegramUsername])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model OrderLine {
+  id               String @id @default(cuid())
+  orderId          String
+  order            Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  skuId            String
+  sku              Sku    @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  skuNameSnapshot  String
+  skuTypeSnapshot  SkuType
+  quantity         Int
+  unitKopecks      Int
+  lineTotalKopecks Int
+
+  @@index([orderId])
+  @@index([skuId])
+}
+
+model SiteSettings {
+  id String @id @default("main")
+
+  paymentInstructions String @default("Оплата подключается: переведите сумму по реквизитам, которые вы получите от оператора, или дождитесь интеграции платёжного провайдера.")
+  heroTitle           String @default("Telegram Stars и Premium")
+  heroSubtitle        String @default("Оформление заказа за пару шагов. Выдача через Fragment после оплаты.")
+  trustBlock          String @default("Мы не храним платёжные данные карт. Статус заказа можно отслеживать по ссылке после оформления.")
+
+  updatedAt DateTime @updatedAt
+}
