@@ -2,9 +2,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// SQLite по умолчанию для локальной разработки. Для production замените на PostgreSQL (см. README).
+// Локально и на Vercel: PostgreSQL (Neon / Supabase / Vercel Postgres). SQLite на serverless не использовать.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

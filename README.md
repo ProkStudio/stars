@@ -32,17 +32,21 @@ src/
 
 ## База данных
 
-- **Локально по умолчанию:** SQLite (`DATABASE_URL="file:./dev.db"` — путь относительно каталога `prisma/`).
-- **Production:** PostgreSQL. В `schema.prisma` замените:
+Используется **PostgreSQL** (и локально, и на Vercel). Файловый **SQLite на serverless (Vercel) не подходит** — нет стабильного `DATABASE_URL` и постоянного диска.
 
-```prisma
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+1. Создайте БД, например бесплатный проект [Neon](https://neon.tech) или [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres).
+2. Скопируйте строку подключения (лучше с `?sslmode=require`).
+3. Пропишите в `.env` как `DATABASE_URL=...`
+4. Локально: `npx prisma migrate dev` (применяет миграции в dev).  
+   На CI/Vercel при сборке выполняется `prisma migrate deploy` (см. `package.json` → `build`).
+
+Первичное наполнение каталога и админа после создания БД:
+
+```bash
+npx prisma db seed
 ```
 
-Затем `npx prisma migrate deploy` на сервере.
+Можно выполнить с локальной машины, подставив ту же `DATABASE_URL`, что и у продакшен-БД.
 
 ## Установка и запуск
 
@@ -63,6 +67,21 @@ npm run dev
 npm run build
 npm start
 ```
+
+## Деплой на Vercel
+
+1. Создайте **PostgreSQL** (рекомендуется [Neon](https://neon.tech): New Project → скопируйте `DATABASE_URL` с `sslmode=require`).
+2. В проекте Vercel: **Settings → Environment Variables** добавьте как минимум:
+   - `DATABASE_URL` — строка Neon/Postgres (для **Production** и при необходимости **Preview**).
+   - `AUTH_SECRET` — длинная случайная строка.
+   - `ADMIN_SESSION_SECRET` — отдельная случайная строка.
+   - Остальное из `.env.example` по необходимости (`FRAGMENT_*`, и т.д.).
+3. Подключите репозиторий и задеплойте. При **build** выполняется `prisma migrate deploy` — таблицы создадутся автоматически, если `DATABASE_URL` задан **до** сборки.
+4. Один раз заполните БД (каталог + админ): локально выполните  
+   `DATABASE_URL="ваша_neon_строка" npx prisma db seed`  
+   или временно подставьте Neon URL в `.env` и выполните `npm run db:seed`.
+
+Ошибка **`Environment variable not found: DATABASE_URL`** означает, что переменная не задана в Vercel или не отмечена для нужного окружения (Production/Preview).
 
 ## Переменные окружения
 
